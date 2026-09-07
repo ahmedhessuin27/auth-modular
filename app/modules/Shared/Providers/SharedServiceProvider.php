@@ -4,6 +4,8 @@ namespace App\Modules\Shared\Providers;
 
 use App\Modules\Shared\Application\Messaging\Contracts\MessagePublisherInterface;
 use App\Modules\Shared\Infrastructure\Messaging\RabbitMQ\RabbitMQPublisher;
+use App\Modules\Shared\Application\Messaging\Contracts\MessageConsumerInterface;
+use App\Modules\Shared\Infrastructure\Messaging\RabbitMQ\RabbitMQConsumer;
 use Illuminate\Support\ServiceProvider;
 
 class SharedServiceProvider extends ServiceProvider
@@ -13,6 +15,10 @@ class SharedServiceProvider extends ServiceProvider
         $this->app->singleton(
             MessagePublisherInterface::class,
             RabbitMQPublisher::class
+        );
+        $this->app->singleton(
+            MessageConsumerInterface::class,
+            RabbitMQConsumer::class
         );
     }
 

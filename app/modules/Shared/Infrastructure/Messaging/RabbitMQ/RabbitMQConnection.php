@@ -18,6 +18,12 @@ final class RabbitMQConnection
                 $config['user'],
                 $config['password'],
                 $config['vhost'],
+                [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'peer_name' => $config['host'],
+                    'SNI_enabled' => true,
+                ],
             );
         }
 
