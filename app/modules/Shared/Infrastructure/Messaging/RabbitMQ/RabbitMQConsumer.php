@@ -31,7 +31,8 @@ final class RabbitMQConsumer implements MessageConsumerInterface
             false,
             function (AMQPMessage $amqpMessage) use (
                 $handler,
-                $channel
+                $channel,
+                $queue
             ): void {
 
                 $data = json_decode(
@@ -50,40 +51,15 @@ final class RabbitMQConsumer implements MessageConsumerInterface
                 );
 
                 try {
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Process Message
-                    |--------------------------------------------------------------------------
-                    */
-
                     $handler($message);
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Success
-                    |--------------------------------------------------------------------------
-                    */
 
                     $amqpMessage->ack();
 
                 } catch (\Throwable $exception) {
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Get Current Retry Count
-                    |--------------------------------------------------------------------------
-                    */
-
                     $retryCount = (int) (
                         $message->headers['retry_count'] ?? 0
                     );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Retry
-                    |--------------------------------------------------------------------------
-                    */
 
                     if ($retryCount < self::MAX_RETRIES) {
 
@@ -91,33 +67,15 @@ final class RabbitMQConsumer implements MessageConsumerInterface
 
                         $this->publishToRetryQueue(
                             $channel,
+                            $queue,
                             $message,
                             $nextRetryCount
                         );
-
-                        /*
-                        | The original message has now been safely
-                        | copied to the retry queue.
-                        |
-                        | Therefore ACK the original message.
-                        */
 
                         $amqpMessage->ack();
 
                         return;
                     }
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Maximum Retries Reached
-                    |--------------------------------------------------------------------------
-                    |
-                    | Reject the message without requeue.
-                    |
-                    | test.queue has test.dlx configured,
-                    | so RabbitMQ sends it to test.dlq.
-                    |
-                    */
 
                     $amqpMessage->nack(
                         false,
@@ -137,9 +95,12 @@ final class RabbitMQConsumer implements MessageConsumerInterface
 
     private function publishToRetryQueue(
         $channel,
+        string $queue,
         Message $message,
         int $retryCount
     ): void {
+        $retryExchange = $queue . '.retry.exchange';
+
         $retryMessage = new AMQPMessage(
             json_encode([
                 'message_id' => $message->messageId,
@@ -163,8 +124,8 @@ final class RabbitMQConsumer implements MessageConsumerInterface
 
         $channel->basic_publish(
             $retryMessage,
-            'test.retry.exchange',
-            'test.retry'
+            $retryExchange,
+            'retry'
         );
     }
 }

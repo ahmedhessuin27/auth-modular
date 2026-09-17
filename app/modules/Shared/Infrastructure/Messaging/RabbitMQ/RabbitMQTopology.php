@@ -2,9 +2,14 @@
 
 namespace App\Modules\Shared\Infrastructure\Messaging\RabbitMQ;
 
-final class RabbitMQTopology
+use App\Modules\Shared\Application\Messaging\Contracts\MessageTopologyInterface;
+use App\Modules\Shared\Application\Messaging\QueueTopology;
+
+final class RabbitMQTopology implements MessageTopologyInterface
 {
-    public function setup(): void
+    private const EVENTS_EXCHANGE = 'modular.events';
+
+    public function setup(QueueTopology ...$topologies): void
     {
         $connection = app(RabbitMQConnection::class)->connect();
 
@@ -12,12 +17,12 @@ final class RabbitMQTopology
 
         /*
         |--------------------------------------------------------------------------
-        | Main Exchange
+        | Main Events Exchange
         |--------------------------------------------------------------------------
         */
 
         $channel->exchange_declare(
-            'modular.events',
+            self::EVENTS_EXCHANGE,
             'topic',
             false,
             true,
@@ -26,26 +31,68 @@ final class RabbitMQTopology
 
         /*
         |--------------------------------------------------------------------------
-        | Dead Letter Exchange
+        | Create Each Queue Topology
         |--------------------------------------------------------------------------
         */
 
+        foreach ($topologies as $topology) {
+            $this->createQueueTopology(
+                $channel,
+                $topology
+            );
+        }
+
+        $channel->close();
+        $connection->close();
+    }
+
+    private function createQueueTopology(
+        $channel,
+        QueueTopology $topology
+    ): void {
+        $queue = $topology->queue;
+
+        $this->declareDeadLetterTopology(
+            $channel,
+            $queue
+        );
+
+        $this->declareMainQueue(
+            $channel,
+            $queue
+        );
+
+        $this->declareRetryTopology(
+            $channel,
+            $queue
+        );
+
+        foreach ($topology->bindings as $routingKey) {
+            $channel->queue_bind(
+                $queue,
+                self::EVENTS_EXCHANGE,
+                $routingKey
+            );
+        }
+    }
+
+    private function declareDeadLetterTopology(
+        $channel,
+        string $queue
+    ): void {
+        $dlx = $queue . '.dlx';
+        $dlq = $queue . '.dlq';
+
         $channel->exchange_declare(
-            'test.dlx',
+            $dlx,
             'direct',
             false,
             true,
             false
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Final Dead Letter Queue
-        |--------------------------------------------------------------------------
-        */
-
         $channel->queue_declare(
-            'test.dlq',
+            $dlq,
             false,
             true,
             false,
@@ -53,19 +100,20 @@ final class RabbitMQTopology
         );
 
         $channel->queue_bind(
-            'test.dlq',
-            'test.dlx',
-            'test.dead'
+            $dlq,
+            $dlx,
+            'dead'
         );
+    }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Main Queue
-        |--------------------------------------------------------------------------
-        */
+    private function declareMainQueue(
+        $channel,
+        string $queue
+    ): void {
+        $dlx = $queue . '.dlx';
 
         $channel->queue_declare(
-            'test.queue',
+            $queue,
             false,
             true,
             false,
@@ -74,48 +122,33 @@ final class RabbitMQTopology
             [
                 'x-dead-letter-exchange' => [
                     'S',
-                    'test.dlx',
+                    $dlx,
                 ],
                 'x-dead-letter-routing-key' => [
                     'S',
-                    'test.dead',
+                    'dead',
                 ],
             ]
         );
+    }
 
-        $channel->queue_bind(
-            'test.queue',
-            'modular.events',
-            'test.message'
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Retry Exchange
-        |--------------------------------------------------------------------------
-        */
+    private function declareRetryTopology(
+        $channel,
+        string $queue
+    ): void {
+        $retryExchange = $queue . '.retry.exchange';
+        $retryQueue = $queue . '.retry.queue';
 
         $channel->exchange_declare(
-            'test.retry.exchange',
+            $retryExchange,
             'direct',
             false,
             true,
             false
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Retry Queue
-        |--------------------------------------------------------------------------
-        |
-        | Message stays here for 5 seconds.
-        | After TTL expires, RabbitMQ sends it back to
-        | modular.events using test.message.
-        |
-        */
-
         $channel->queue_declare(
-            'test.retry',
+            $retryQueue,
             false,
             true,
             false,
@@ -128,22 +161,15 @@ final class RabbitMQTopology
                 ],
                 'x-dead-letter-exchange' => [
                     'S',
-                    'modular.events',
-                ],
-                'x-dead-letter-routing-key' => [
-                    'S',
-                    'test.message',
+                    self::EVENTS_EXCHANGE,
                 ],
             ]
         );
 
         $channel->queue_bind(
-            'test.retry',
-            'test.retry.exchange',
-            'test.retry'
+            $retryQueue,
+            $retryExchange,
+            'retry'
         );
-
-        $channel->close();
-        $connection->close();
     }
 }
