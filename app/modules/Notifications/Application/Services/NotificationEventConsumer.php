@@ -2,12 +2,12 @@
 
 namespace App\Modules\Notifications\Application\Services;
 
-use App\Modules\Shared\Application\Messaging\Contracts\MessageConsumer;
+use App\Modules\Shared\Application\Messaging\Contracts\MessageConsumerInterface;
 
 final class NotificationEventConsumer
 {
     public function __construct(
-        private readonly MessageConsumer $consumer,
+        private readonly MessageConsumerInterface $consumer,
         private readonly NotificationEventDispatcher $dispatcher,
     ) {
     }
