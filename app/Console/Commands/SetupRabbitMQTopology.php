@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Shared\Application\Messaging\Contracts\MessageTopologyInterface;
-use App\Modules\Shared\Application\Messaging\QueueTopology;
+use App\Modules\Shared\Application\Messaging\MessageSubscriptions;
 use Illuminate\Console\Command;
 
 class SetupRabbitMQTopology extends Command
@@ -13,17 +13,20 @@ class SetupRabbitMQTopology extends Command
     protected $description = 'Set up RabbitMQ exchanges, queues, and bindings';
 
     public function handle(
-        MessageTopologyInterface $topology
+        MessageTopologyInterface $topology,
+        MessageSubscriptions $subscriptions,
     ): int {
         try {
-            $topology->setup(
-                new QueueTopology(
-                    queue: 'notifications.events.queue',
-                    bindings: [
-                        'auth.user.registered',
-                    ],
-                ),
-            );
+            // Each module declares its own queue and bindings when it subscribes.
+            $topologies = $subscriptions->topologies();
+
+            $topology->setup(...$topologies);
+
+            foreach ($topologies as $queueTopology) {
+                $this->line(
+                    "  {$queueTopology->queue} <- " . implode(', ', $queueTopology->bindings)
+                );
+            }
 
             $this->info(
                 'RabbitMQ topology created successfully!'

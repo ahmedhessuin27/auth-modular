@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Auth\Application\Services\AuthEventPublisher;
-use App\Modules\Auth\Domain\Events\UserRegistered;
+use App\Modules\Auth\IntegrationEvents\UserRegistered;
 use Illuminate\Console\Command;
 
 class PublishUserRegisteredTest extends Command
@@ -25,7 +25,7 @@ class PublishUserRegisteredTest extends Command
             $eventPublisher->userRegistered($event);
 
             $this->info(
-                'User registered event published successfully!'
+                'User registered event stored in the outbox; run rabbitmq:relay-outbox to deliver it.'
             );
 
             return self::SUCCESS;

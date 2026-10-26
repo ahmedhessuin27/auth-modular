@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Modules\Auth\Application\Services;
-use App\Modules\Auth\Domain\Events\UserRegistered;
+use App\Modules\Auth\IntegrationEvents\UserRegistered;
 use App\Modules\Shared\Application\Messaging\Contracts\MessagePublisherInterface;
 use App\Modules\Shared\Application\Messaging\Message;
 

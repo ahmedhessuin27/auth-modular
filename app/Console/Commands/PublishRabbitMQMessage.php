@@ -26,7 +26,7 @@ class PublishRabbitMQMessage extends Command
 
             $publisher->publish($message);
 
-            $this->info('Test message published successfully!');
+            $this->info('Test message stored in the outbox; run rabbitmq:relay-outbox to deliver it.');
 
             return self::SUCCESS;
 
