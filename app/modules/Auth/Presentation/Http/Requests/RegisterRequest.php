@@ -1,15 +1,18 @@
 <?php
 
-namespace App\Modules\Users\Presentation\Http\Requests;
+namespace App\Modules\Auth\Presentation\Http\Requests;
 
 use App\Models\User;
-use App\Modules\Users\Application\DTOs\RegisterUserData;
+use App\Modules\Auth\Application\DTOs\RegisterUserData;
+use App\Modules\Auth\Presentation\Http\Requests\Concerns\NormalizesEmail;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class RegisterRequest extends FormRequest
 {
+    use NormalizesEmail;
+
     /**
      * @return array<string, array<int, mixed>>
      */
@@ -17,9 +20,8 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)],
             'password' => ['required', 'string', 'confirmed', Password::defaults()],
-            'device_name' => ['sometimes', 'string', 'max:255'],
         ];
     }
 
@@ -29,7 +31,6 @@ class RegisterRequest extends FormRequest
             name: $this->validated('name'),
             email: $this->validated('email'),
             password: $this->validated('password'),
-            deviceName: $this->validated('device_name', 'api'),
         );
     }
 }

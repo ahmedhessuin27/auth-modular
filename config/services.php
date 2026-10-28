@@ -28,6 +28,20 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | Social sign-in: comma-separated client IDs whose ID tokens the API
+    | accepts. For Google, the Android, iOS and web OAuth client IDs; for
+    | Apple, the app's bundle ID and/or Services ID.
+    */
+
+    'google' => [
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS'))))),
+    ],
+
+    'apple' => [
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('APPLE_CLIENT_IDS'))))),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

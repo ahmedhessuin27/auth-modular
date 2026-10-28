@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Users\Application\DTOs;
+namespace App\Modules\Auth\Application\DTOs;
 
 final readonly class LoginData
 {

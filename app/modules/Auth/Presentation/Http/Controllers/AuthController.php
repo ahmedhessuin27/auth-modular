@@ -1,14 +1,17 @@
 <?php
 
-namespace App\Modules\Users\Presentation\Http\Controllers;
+namespace App\Modules\Auth\Presentation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Users\Application\Services\UserAuthService;
-use App\Modules\Users\Domain\Exceptions\InvalidCredentialsException;
-use App\Modules\Users\Presentation\Http\Requests\LoginRequest;
-use App\Modules\Users\Presentation\Http\Requests\RegisterRequest;
-use App\Modules\Users\Presentation\Http\Resources\AuthenticatedUserResource;
-use App\Modules\Users\Presentation\Http\Resources\UserResource;
+use App\Modules\Auth\Application\Services\UserAuthService;
+use App\Modules\Auth\Domain\Exceptions\EmailNotVerifiedException;
+use App\Modules\Auth\Domain\Exceptions\InvalidCredentialsException;
+use App\Modules\Auth\Presentation\Http\Requests\LoginRequest;
+use App\Modules\Auth\Presentation\Http\Requests\RegisterRequest;
+use App\Modules\Auth\Presentation\Http\Requests\ResendCodeRequest;
+use App\Modules\Auth\Presentation\Http\Requests\VerifyCodeRequest;
+use App\Modules\Auth\Presentation\Http\Resources\AuthenticatedUserResource;
+use App\Modules\Auth\Presentation\Http\Resources\VerificationCodeResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -20,9 +23,26 @@ class AuthController extends Controller
         private readonly UserAuthService $authService,
     ) {}
 
-    public function register(RegisterRequest $request): JsonResponse
+    public function register(RegisterRequest $request): VerificationCodeResource
     {
-        $authenticated = $this->authService->register($request->toData());
+        return VerificationCodeResource::make(
+            $this->authService->register($request->toData()),
+        );
+    }
+
+    public function resendRegistrationCode(ResendCodeRequest $request): VerificationCodeResource
+    {
+        return VerificationCodeResource::make(
+            $this->authService->resendRegistrationCode(
+                $request->validated('email'),
+                $request->validated('verification_token'),
+            ),
+        );
+    }
+
+    public function verifyRegistration(VerifyCodeRequest $request): JsonResponse
+    {
+        $authenticated = $this->authService->verifyRegistration($request->toData());
 
         return AuthenticatedUserResource::make($authenticated)
             ->response()
@@ -40,6 +60,10 @@ class AuthController extends Controller
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
+        } catch (EmailNotVerifiedException) {
+            throw ValidationException::withMessages([
+                'email' => __('Your email address is not verified. Reset your password to verify it.'),
+            ]);
         }
 
         return AuthenticatedUserResource::make($authenticated);
@@ -50,10 +74,5 @@ class AuthController extends Controller
         $this->authService->logout($request->user());
 
         return response()->noContent();
-    }
-
-    public function me(Request $request): UserResource
-    {
-        return UserResource::make($request->user());
     }
 }

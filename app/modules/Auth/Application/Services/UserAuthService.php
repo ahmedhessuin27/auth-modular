@@ -1,36 +1,83 @@
 <?php
 
-namespace App\Modules\Users\Application\Services;
+namespace App\Modules\Auth\Application\Services;
 
 use App\Models\User;
-use App\Modules\Auth\Application\Services\AuthEventPublisher;
+use App\Modules\Auth\Application\DTOs\AuthenticatedUser;
+use App\Modules\Auth\Application\DTOs\LoginData;
+use App\Modules\Auth\Application\DTOs\RegisterUserData;
+use App\Modules\Auth\Application\DTOs\VerificationCodeStatus;
+use App\Modules\Auth\Application\DTOs\VerifyCodeData;
+use App\Modules\Auth\Domain\Exceptions\EmailNotVerifiedException;
+use App\Modules\Auth\Domain\Exceptions\InvalidCredentialsException;
 use App\Modules\Auth\IntegrationEvents\UserRegistered;
-use App\Modules\Users\Application\DTOs\AuthenticatedUser;
-use App\Modules\Users\Application\DTOs\LoginData;
-use App\Modules\Users\Application\DTOs\RegisterUserData;
-use App\Modules\Users\Domain\Exceptions\InvalidCredentialsException;
+use App\Modules\Auth\IntegrationEvents\VerificationPurpose;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 final class UserAuthService
 {
     public function __construct(
         private readonly AuthEventPublisher $eventPublisher,
+        private readonly VerificationCodeService $verificationCodes,
     ) {}
 
     /**
-     * Creates the user and stores its UserRegistered event in the outbox
-     * within one transaction, so the event is only relayed to RabbitMQ
-     * once the user actually exists.
+     * Emails a verification code. No user exists until the code is
+     * confirmed through verifyRegistration().
+     *
+     * @throws ValidationException when too many codes were requested
      */
-    public function register(RegisterUserData $data): AuthenticatedUser
+    public function register(RegisterUserData $data): VerificationCodeStatus
     {
-        return DB::transaction(function () use ($data): AuthenticatedUser {
-            $user = User::create([
-                'name' => $data->name,
+        return $this->verificationCodes->start(VerificationPurpose::Registration, $data->email, [
+            'name' => $data->name,
+            // Hashed now, so the plain password never sits in the cache.
+            'password' => Hash::make($data->password),
+        ]);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    public function resendRegistrationCode(string $email, string $verificationToken): VerificationCodeStatus
+    {
+        return $this->verificationCodes->resend(VerificationPurpose::Registration, $email, $verificationToken);
+    }
+
+    /**
+     * Creates the verified user and stores its UserRegistered event in the
+     * outbox within one transaction, so the event is only relayed to
+     * RabbitMQ once the user actually exists.
+     *
+     * @throws ValidationException
+     */
+    public function verifyRegistration(VerifyCodeData $data): AuthenticatedUser
+    {
+        $registration = $this->verificationCodes->verify(
+            VerificationPurpose::Registration,
+            $data->email,
+            $data->verificationToken,
+            $data->code,
+        );
+
+        return DB::transaction(function () use ($data, $registration): AuthenticatedUser {
+            // The email was free when the code was requested, but a social
+            // sign-in may have taken it since.
+            if (User::query()->where('email', $data->email)->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => __('validation.unique', ['attribute' => 'email']),
+                ]);
+            }
+
+            $user = new User([
+                'name' => $registration['name'],
                 'email' => $data->email,
-                'password' => $data->password,
+                'password' => $registration['password'],
             ]);
+            $user->email_verified_at = now();
+            $user->save();
 
             $this->eventPublisher->userRegistered(new UserRegistered(
                 userId: (string) $user->getKey(),
@@ -47,6 +94,7 @@ final class UserAuthService
 
     /**
      * @throws InvalidCredentialsException
+     * @throws EmailNotVerifiedException
      */
     public function login(LoginData $data): AuthenticatedUser
     {
@@ -54,6 +102,10 @@ final class UserAuthService
 
         if (! $user || ! Hash::check($data->password, $user->password)) {
             throw new InvalidCredentialsException;
+        }
+
+        if ($user->email_verified_at === null) {
+            throw new EmailNotVerifiedException;
         }
 
         return new AuthenticatedUser(

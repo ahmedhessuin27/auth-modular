@@ -2,6 +2,8 @@
 
 namespace App\Modules\Auth\Providers;
 
+use App\Modules\Auth\Domain\Contracts\IdentityTokenVerifier;
+use App\Modules\Auth\Infrastructure\Services\OidcIdentityTokenVerifier;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,11 +14,10 @@ class AuthServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Example:
-        // $this->app->bind(
-        //     \App\Modules\Auth\Domain\Contracts\UserRepository::class,
-        //     \App\Modules\Auth\Infrastructure\Repositories\EloquentUserRepository::class,
-        // );
+        $this->app->bind(
+            IdentityTokenVerifier::class,
+            OidcIdentityTokenVerifier::class,
+        );
     }
 
     /**

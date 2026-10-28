@@ -1,12 +1,15 @@
 <?php
 
-namespace App\Modules\Users\Presentation\Http\Requests;
+namespace App\Modules\Auth\Presentation\Http\Requests;
 
-use App\Modules\Users\Application\DTOs\LoginData;
+use App\Modules\Auth\Application\DTOs\LoginData;
+use App\Modules\Auth\Presentation\Http\Requests\Concerns\NormalizesEmail;
 use Illuminate\Foundation\Http\FormRequest;
 
 class LoginRequest extends FormRequest
 {
+    use NormalizesEmail;
+
     /**
      * @return array<string, array<int, string>>
      */

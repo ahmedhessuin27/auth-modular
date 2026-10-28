@@ -3,7 +3,9 @@
 namespace App\Modules\Notifications\Providers;
 
 use App\Modules\Auth\IntegrationEvents\UserRegistered;
+use App\Modules\Auth\IntegrationEvents\VerificationCodeIssued;
 use App\Modules\Notifications\Application\Handlers\UserRegisteredHandler;
+use App\Modules\Notifications\Application\Handlers\VerificationCodeIssuedHandler;
 use App\Modules\Shared\Application\Messaging\MessageSubscriptions;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +31,7 @@ class NotificationsServiceProvider extends ServiceProvider
             function (MessageSubscriptions $subscriptions): void {
                 $subscriptions->subscribe(self::QUEUE, [
                     UserRegistered::NAME => UserRegisteredHandler::class,
+                    VerificationCodeIssued::NAME => VerificationCodeIssuedHandler::class,
                 ]);
             }
         );
