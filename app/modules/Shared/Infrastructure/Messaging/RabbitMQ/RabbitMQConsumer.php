@@ -5,7 +5,7 @@ namespace App\Modules\Shared\Infrastructure\Messaging\RabbitMQ;
 use App\Modules\Shared\Application\Messaging\ConsumerLimits;
 use App\Modules\Shared\Application\Messaging\Contracts\MessageConsumerInterface;
 use App\Modules\Shared\Application\Messaging\Message;
-use Illuminate\Support\Facades\DB;
+use App\Modules\Shared\Infrastructure\Messaging\Inbox\InboxProcessor;
 use Illuminate\Support\Facades\Log;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AbstractConnection;
@@ -30,8 +30,8 @@ final class RabbitMQConsumer implements MessageConsumerInterface
 
     public function __construct(
         private readonly RabbitMQConnection $rabbitMQConnection,
-    ) {
-    }
+        private readonly InboxProcessor $inbox,
+    ) {}
 
     public function stop(): void
     {
@@ -41,7 +41,7 @@ final class RabbitMQConsumer implements MessageConsumerInterface
     public function consume(
         string $queue,
         callable $handler,
-        ConsumerLimits $limits = new ConsumerLimits(),
+        ConsumerLimits $limits = new ConsumerLimits,
     ): void {
         $this->stopping = false;
         $startedAt = microtime(true);
@@ -212,25 +212,9 @@ final class RabbitMQConsumer implements MessageConsumerInterface
         callable $handler,
     ): void {
         try {
-            // Deduplicate per queue: the same event fans out to every
+            // Deduplicated per queue: the same event fans out to every
             // subscribing module with the same message id.
-            $alreadyProcessed = DB::table('processed_messages')
-                ->where('queue', $queue)
-                ->where('message_id', $message->messageId)
-                ->exists();
-
-            if (! $alreadyProcessed) {
-                $handler($message);
-
-                DB::table('processed_messages')->insertOrIgnore([
-                    'queue' => $queue,
-                    'message_id' => $message->messageId,
-                    'message_name' => $message->name,
-                    'processed_at' => now(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+            $this->inbox->process($queue, $message, $handler);
         } catch (\Throwable $exception) {
             $this->retryOrDeadLetter(
                 $amqpMessage,
@@ -309,7 +293,7 @@ final class RabbitMQConsumer implements MessageConsumerInterface
         Message $message,
         int $retryCount,
     ): void {
-        $retryExchange = $queue . '.retry.exchange';
+        $retryExchange = $queue.'.retry.exchange';
 
         $retryMessage = $this->toAmqpMessage(new Message(
             name: $message->name,

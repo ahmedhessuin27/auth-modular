@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Shared\Infrastructure\Messaging\Inbox\ProcessedMessage;
 use App\Modules\Shared\Infrastructure\Messaging\Outbox\OutboxMessage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -10,5 +11,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('model:prune', [
-    '--model' => [OutboxMessage::class],
+    '--model' => [OutboxMessage::class, ProcessedMessage::class],
 ])->daily();
